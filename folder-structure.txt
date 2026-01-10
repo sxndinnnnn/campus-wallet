@@ -1,0 +1,15 @@
+- campus-wallet (root folder)
+	- project_overview.md (the text file for other devs)
+	- .gitignore (tells git what to ignore like node_modules, env files)
+	- client (frontend - react + vite)
+		- src
+		- package.json
+		- tailwind.config.js
+
+	- server (backend - node + express)
+		- config (supabase + resend configuration)
+		- routes (api routes)
+		- index.js (main server entry point)
+		- .env (api keys)
+		- package.json
+		
