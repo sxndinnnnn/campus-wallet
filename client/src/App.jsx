@@ -1,3 +1,4 @@
+import Login from './Login'
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { Wallet, ArrowDownCircle, ArrowUpCircle, Plus } from 'lucide-react'
@@ -8,24 +9,29 @@ function App() {
   const [balance, setBalance] = useState(0)
   const [income, setIncome] = useState(0)
   const [expense, setExpense] = useState(0)
+  const [session, setSession] = useState(null)
   
-  // NEW: State for the form inputs.
+  // State for the form inputs
   const [formData, setFormData] = useState({
     description: '',
     amount: '',
     category: 'Food',
-    // Default to Expense.
-    is_expense: true
+    is_expense: true // Default to Expense
   })
 
+  // Fetch transactions only when a session exists
   useEffect(() => {
-    fetchTransactions()
-  }, [])
+    if (session) {
+      fetchTransactions()
+    }
+  }, [session])
 
   const fetchTransactions = async () => {
     try {
-      const response = await axios.get('`${import.meta.env.VITE_API_URL}/api/transactions`')
-      // Sort by latest first
+      // THE LAST TWEAK: Sending user_id in the URL query string
+      const response = await axios.get(`${import.meta.env.VITE_API_URL}/api/transactions?user_id=${session.user.id}`)
+      
+      // Sort by latest first based on the created_at timestamp
       const sortedData = response.data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
       setTransactions(sortedData)
       setLoading(false)
@@ -34,25 +40,23 @@ function App() {
     }
   }
 
-  // NEW: Handle Form Changes
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
-  // NEW: Handle Submit (Sending data to backend.)
   const handleSubmit = async (e) => {
-    // Stop page refresh.
     e.preventDefault() 
     if(!formData.amount || !formData.description) return alert("Fill all fields!")
 
     try {
-      await axios.post('`${import.meta.env.VITE_API_URL}/api/transactions`', {
+      // Sending user_id from the session to the backend for saving
+      await axios.post(`${import.meta.env.VITE_API_URL}/api/transactions`, {
         ...formData,
-        // Today's date.
-        date: new Date().toISOString().split('T')[0]
+        date: new Date().toISOString().split('T')[0], // Today's date
+        user_id: session.user.id // Links the transaction to the logged-in student
       })
       
-      // Clear form and reload list.
+      // Clear form and reload the list to show the new transaction
       setFormData({ description: '', amount: '', category: 'Food', is_expense: true })
       fetchTransactions() 
     } catch (error) {
@@ -60,85 +64,90 @@ function App() {
     }
   }
 
-// Calculate totals whenever 'transactions' change.
-useEffect(() => {
-  const calculateFinance = () => {
-    let inc = 0
-    let exp = 0
+  // Calculate totals whenever 'transactions' change
+  useEffect(() => {
+    const calculateFinance = () => {
+      let inc = 0
+      let exp = 0
 
-    transactions.forEach(t => {
-      if (t.is_expense) {
-        exp += parseFloat(t.amount)
-      } else {
-        inc += parseFloat(t.amount)
-      }
-    })
+      transactions.forEach(t => {
+        if (t.is_expense) {
+          exp += parseFloat(t.amount)
+        } else {
+          inc += parseFloat(t.amount)
+        }
+      })
 
-    setIncome(inc)
-    setExpense(exp)
-    setBalance(inc - exp)
+      setIncome(inc)
+      setExpense(exp)
+      setBalance(inc - exp)
+    }
+
+    calculateFinance()
+  }, [transactions])
+
+  // --- THE GATEKEEPER ---
+  if (!session) {
+    return <Login onLogin={(sessionData) => setSession(sessionData)} />
   }
-
-  calculateFinance()
-  // The dependency array ensures this runs every time 'transactions' updates.
-}, [transactions])
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 p-4 md:p-8 font-sans">
-      <header className="flex items-center gap-2 mb-8 max-w-4xl mx-auto">
-        <Wallet className="w-8 h-8 text-blue-600" />
-        <h1 className="text-3xl font-bold">CampusWallet</h1>
+      {/* HEADER WITH LOGOUT */}
+      <header className="flex items-center justify-between mb-8 max-w-4xl mx-auto">
+        <div className="flex items-center gap-2">
+          <Wallet className="w-8 h-8 text-blue-600" />
+          <h1 className="text-3xl font-bold">CampusWallet</h1>
+        </div>
+        <button 
+           onClick={() => setSession(null)} 
+           className="text-sm text-slate-500 hover:text-red-500 font-medium transition-colors"
+        >
+          Log Out
+        </button>
       </header>
 
       {/* SUMMARY CARDS */}
-<div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="bg-blue-600 text-white p-6 rounded-xl shadow-lg">
+          <p className="text-blue-100 text-sm font-medium">Total Balance</p>
+          <h2 className="text-3xl font-bold mt-1">
+            {balance.toLocaleString('en-LK', { style: 'currency', currency: 'LKR' })}
+          </h2>
+        </div>
 
-  {/* Balance Card */}
-  <div className="bg-blue-600 text-white p-6 rounded-xl shadow-lg">
-    <p className="text-blue-100 text-sm font-medium">Total Balance</p>
-    <h2 className="text-3xl font-bold mt-1">
-      LKR {balance.toLocaleString('en-LK', { style: 'currency', currency: 'LKR' })}
-    </h2>
-  </div>
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="p-1 bg-green-100 rounded-full text-green-600">
+              <ArrowUpCircle size={16} />
+            </div>
+            <p className="text-slate-500 text-sm font-medium">Total Income</p>
+          </div>
+          <h2 className="text-2xl font-bold text-slate-800"> 
+            {income.toLocaleString('en-LK', { style: 'currency', currency: 'LKR' })}
+          </h2>
+        </div>
 
-  {/* Income Card */}
-  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-    <div className="flex items-center gap-2 mb-2">
-      <div className="p-1 bg-green-100 rounded-full text-green-600">
-        <ArrowUpCircle size={16} />
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="p-1 bg-red-100 rounded-full text-red-600">
+              <ArrowDownCircle size={16} />
+            </div>
+            <p className="text-slate-500 text-sm font-medium">Total Expenses</p>
+          </div>
+          <h2 className="text-2xl font-bold text-slate-800">
+            {expense.toLocaleString('en-LK', { style: 'currency', currency: 'LKR' })}
+          </h2>
+        </div>
       </div>
-      <p className="text-slate-500 text-sm font-medium">Total Income</p>
-    </div>
-    <h2 className="text-2xl font-bold text-slate-800"> 
-      {income.toLocaleString('en-LK', { style: 'currency', currency: 'LKR' })}
-    </h2>
-  </div>
-
-  {/* Expense Card */}
-  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-    <div className="flex items-center gap-2 mb-2">
-      <div className="p-1 bg-red-100 rounded-full text-red-600">
-        <ArrowDownCircle size={16} />
-      </div>
-      <p className="text-slate-500 text-sm font-medium">Total Expenses</p>
-    </div>
-    <h2 className="text-2xl font-bold text-slate-800">
-      {balance.toLocaleString('en-LK', { style: 'currency', currency: 'LKR' })}
-    </h2>
-  </div>
-
-</div>
 
       <div className="max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8">
-        
-        {/* SECTION 1: ADD TRANSACTION FORM */}
+        {/* ADD TRANSACTION FORM */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 h-fit">
           <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
             <Plus className="w-5 h-5" /> Add New
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
-            
-            {/* Toggle Expense/Income */}
             <div className="flex gap-2 p-1 bg-slate-100 rounded-lg">
               <button
                 type="button"
@@ -163,8 +172,8 @@ useEffect(() => {
                 name="description" 
                 value={formData.description}
                 onChange={handleInputChange}
-                placeholder="e.g. Bus Ticket to Colombo" 
-                className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                placeholder="e.g. Canteen Lunch" 
+                className="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
 
@@ -177,7 +186,7 @@ useEffect(() => {
                   value={formData.amount}
                   onChange={handleInputChange}
                   placeholder="0.00" 
-                  className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full p-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div className="flex-1">
@@ -186,7 +195,7 @@ useEffect(() => {
                   name="category" 
                   value={formData.category}
                   onChange={handleInputChange}
-                  className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                  className="w-full p-2 border border-slate-300 rounded-lg bg-white outline-none"
                 >
                   <option>Food</option>
                   <option>Transport</option>
@@ -203,7 +212,7 @@ useEffect(() => {
           </form>
         </div>
 
-        {/* SECTION 2: TRANSACTION LIST */}
+        {/* RECENT HISTORY LIST */}
         <div>
           <h2 className="text-xl font-semibold mb-4">Recent History</h2>
           {loading ? (
@@ -222,14 +231,13 @@ useEffect(() => {
                     </div>
                   </div>
                   <div className={`font-bold ${t.is_expense ? 'text-red-600' : 'text-green-600'}`}>
-                    {t.is_expense ? '-' : '+'} LKR {t.amount}
+                    {t.is_expense ? '-' : '+'} LKR {parseFloat(t.amount).toLocaleString()}
                   </div>
                 </div>
               ))}
             </div>
           )}
         </div>
-        
       </div>
     </div>
   )

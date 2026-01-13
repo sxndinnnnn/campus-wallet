@@ -19,23 +19,27 @@ const supabaseKey = process.env.SUPABASE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Create the basic "Home" route.
-// Visit http://localhost:5000/ in the browser to see this.
 app.get('/', (req, res) => {
   res.send('CampusWallet Backend is Running! 🚀');
 });
 
-// Create a route to fetch transactions.
+// UPDATED: Fetch transactions ONLY for a specific user
 app.get('/api/transactions', async (req, res) => {
+  // 1. Extract user_id from the query parameters (e.g., /api/transactions?user_id=123)
+  const { user_id } = req.query;
+
+  if (!user_id) {
+    return res.status(400).json({ error: "user_id is required" });
+  }
+
   try {
-    // Fetch data from the 'transactions' table.
     const { data, error } = await supabase
       .from('transactions')
-      // Select (*) all columns within the table.
-      .select('*');
+      .select('*')
+      // 2. Filter: Only get rows where user_id matches the logged-in user
+      .eq('user_id', user_id);
 
     if (error) throw error;
-
-    // Send the data back to the user.
     res.status(200).json(data);
     
   } catch (err) {
@@ -43,23 +47,19 @@ app.get('/api/transactions', async (req, res) => {
   }
 });
 
-// Existing GET Route
-
-// NEW: Create the route to ADD a transaction.
+// Create the route to ADD a transaction with User ID.
 app.post('/api/transactions', async (req, res) => {
-  const { amount, category, description, date, is_expense } = req.body;
+  const { amount, category, description, date, is_expense, user_id } = req.body;
 
   try {
     const { data, error } = await supabase
       .from('transactions')
       .insert([
-        { amount, category, description, date, is_expense }
+        { amount, category, description, date, is_expense, user_id }
       ])
-      // Return the inserted data for confirmation.
       .select();
 
     if (error) throw error;
-    // 201 = "Created"
     res.status(201).json(data);
 
   } catch (err) {
